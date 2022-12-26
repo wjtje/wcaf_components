@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/schema/library.json",
+  "name": "Custom wcaf Components",
+  "version": "0.0.1-alpha",
+  "authors": [
+    {
+      "name": "Wouter van der Wal",
+      "email": "me@wjtje.dev",
+      "url": "https://wjtje.dev/contact"
+    }
+  ],
+  "frameworks": ["arduino"],
+  "platforms": ["atmelavr", "espressif8266", "espressif32"]
+}
