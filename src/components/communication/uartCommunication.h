@@ -12,8 +12,19 @@ class Uart : public CommunicationInterface {
   static const char *TAG;
 
   void set_buffer_size(uint8_t size) { this->buffer_size_ = size; }
+  void set_serial(HardwareSerial *serial) { this->serial_ = serial; }
+  void set_speed(unsigned long speed) { this->speed_ = speed; }
 
   void send(const uint8_t *data, const uint8_t *addr);
+#ifdef ARDUINO_AVR_UNO
+  void on_data(void (*lambda)(const uint8_t *data, const uint8_t *addr,
+                              void *argument)) {
+    this->on_data_ = lambda;
+  }
+  void on_error(void (*lambda)(uint8_t error, void *argument)) {
+    this->on_error_ = lambda;
+  }
+#elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
   void on_data(
       std::function<void(const uint8_t *data, const uint8_t *addr)> &&lambda) {
     this->on_data_ = lambda;
@@ -21,11 +32,12 @@ class Uart : public CommunicationInterface {
   void on_error(std::function<void(uint8_t error)> &&lambda) {
     this->on_error_ = lambda;
   }
+#endif
 
  protected:
   void reset_buffer_();
 
-  HardwareSerial *serial_{&Serial2};
+  HardwareSerial *serial_;
   unsigned long speed_;
 
   // Buffer
@@ -38,8 +50,13 @@ class Uart : public CommunicationInterface {
   uint16_t data_timeout_{10};
 
   // Callbacks
+#ifdef ARDUINO_AVR_UNO
+  void (*on_data_)(const uint8_t *data, const uint8_t *addr, void *argument);
+  void (*on_error_)(uint8_t error, void *argument);
+#elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
   std::function<void(const uint8_t *data, const uint8_t *addr)> on_data_;
   std::function<void(uint8_t error)> on_error_;
+#endif
 };
 
 }  // namespace uart

@@ -19,7 +19,11 @@ void Uart::loop() {
   // Check last time data read
   if (this->is_receiving_ &&
       millis() - this->last_time_ > this->data_timeout_) {
+#ifdef ARDUINO_AVR_UNO
+    this->on_error_(data_error::TIMEOUT, this->argument_);
+#elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
     this->on_error_(data_error::TIMEOUT);
+#endif
     this->reset_buffer_();
   }
 
@@ -30,7 +34,11 @@ void Uart::loop() {
   int incomming_byte = this->serial_->read();
   if (incomming_byte < 0) {
     WCAF_LOG("Tried to read bytes, but there wasn't anything to read");
+#ifdef ARDUINO_AVR_UNO
+    this->on_error_(data_error::READ_ERROR, this->argument_);
+#elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
     this->on_error_(data_error::READ_ERROR);
+#endif
     return;
   }
 
@@ -56,7 +64,11 @@ void Uart::loop() {
 
   // Check if the correct amount of bytes are received
   if (this->buffer_[1] == this->buffer_pos_ && this->buffer_pos_ > 0) {
+#ifdef ARDUINO_AVR_UNO
+    this->on_data_(this->buffer_, BROADCAST_ADDRESS, this->argument_);
+#elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
     this->on_data_(this->buffer_, BROADCAST_ADDRESS);
+#endif
     this->reset_buffer_();
     return;
   }
@@ -64,7 +76,11 @@ void Uart::loop() {
   // Check for buffer overflow
   if (this->buffer_pos_ >= 128) {
     WCAF_LOG("To much data");
+#ifdef ARDUINO_AVR_UNO
+    this->on_error_(data_error::LENGTH_ERROR, this->argument_);
+#elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
     this->on_error_(data_error::LENGTH_ERROR);
+#endif
     this->reset_buffer_();
     return;
   }

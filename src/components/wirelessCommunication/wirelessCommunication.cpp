@@ -1,3 +1,4 @@
+#if defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
 #include "wirelessCommunication.h"
 
 #include <esp_wifi.h>
@@ -65,3 +66,4 @@ void WirelessCommunication::on_recv_cb(const uint8_t *mac_addr,
 }
 
 }  // namespace wirelessCommunication
+#endif

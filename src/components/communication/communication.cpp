@@ -14,7 +14,15 @@ void Communication::setup() {
 
   this->interface_->set_buffer_size(this->buffer_size_);
   this->interface_->setup();
+#ifdef ARDUINO_AVR_UNO
+  this->interface_->set_argument(this);
+  this->interface_->on_data([](const uint8_t *data, const uint8_t *addr,
+                               void *argument) {
+    auto comm = (Communication *)argument;
+#elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
   this->interface_->on_data([this](const uint8_t *data, const uint8_t *addr) {
+    auto comm = this;
+#endif
     // Get information from header
     uint8_t length = data[1];
     uint16_t crc_r = data[2] << 8 | data[3];
@@ -25,19 +33,31 @@ void Communication::setup() {
 
     if (crc != crc_r) {
       WCAF_LOG("Invalid CRC: Received '%02X', Calculated '%02X'", crc_r, crc);
-      this->on_error_(data_error::CRC_ERROR);
+      comm->on_error_(data_error::CRC_ERROR);
       return;
     }
 
     WCAF_LOG("Received %u bytes from %s with type %u", length,
              helpers::mac_addr_to_string(addr), type);
 
-    for (auto callback : this->recv_callbacks_) {
+    for (auto callback : comm->recv_callbacks_) {
       if (callback->type == type || callback->type == 0)
+#ifdef ARDUINO_AVR_UNO
+        callback->lambda(data + HEADER_SIZE, length, addr, callback->argument);
+#elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
         callback->lambda(data + HEADER_SIZE, length, addr);
+#endif
     }
   });
+
+#ifdef ARDUINO_AVR_UNO
+  this->interface_->on_error([](uint8_t error, void *argument) {
+    auto comm = (Communication *)argument;
+    comm->on_error_(error);
+  });
+#elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
   this->interface_->on_error([this](uint8_t error) { this->on_error_(error); });
+#endif
 }
 
 void Communication::loop() { this->interface_->loop(); }
@@ -63,10 +83,33 @@ void Communication::send_message(const uint16_t type, const uint8_t *data,
   this->interface_->send(this->send_buffer_, addr);
 }
 
+#ifdef ARDUINO_AVR_UNO
+void Communication::on_message(uint16_t type, void *argument,
+                               void (*lambda)(const uint8_t *data,
+                                              const uint8_t length,
+                                              const uint8_t *addr,
+                                              void *argument)) {
+  auto tmp = (recv_callback_struct_ *)malloc(sizeof(recv_callback_struct_));
+
+  if (tmp == nullptr) {
+    WCAF_LOG("Could not register on_message callback, out of memory");
+    return;
+  }
+
+  tmp->argument = argument;
+  tmp->type = type;
+  tmp->lambda = lambda;
+
+  this->recv_callbacks_.push_back(tmp);
+}
+
+void Communication::on_error(void (*lambda)(uint8_t error)) {
+  this->err_callbacks_.push_back(lambda);
+}
+#elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
 void Communication::on_message(
-    std::function<void(const uint8_t *data, const uint8_t length,
-                       const uint8_t *addr)> &&lambda,
-    uint16_t type) {
+    uint16_t type, std::function<void(const uint8_t *data, const uint8_t length,
+                                      const uint8_t *addr)> &&lambda) {
   auto tmp = (recv_callback_struct_ *)malloc(sizeof(recv_callback_struct_));
 
   if (tmp == nullptr) {
@@ -83,6 +126,7 @@ void Communication::on_message(
 void Communication::on_error(std::function<void(uint8_t error)> &&lambda) {
   this->err_callbacks_.push_back(lambda);
 }
+#endif
 
 void Communication::on_error_(uint8_t error) {
   WCAF_LOG("Communication error %u", error);

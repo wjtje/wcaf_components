@@ -1,5 +1,5 @@
 #pragma once
-
+#if defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_now.h>
@@ -62,3 +62,4 @@ class WirelessCommunication : public Component {
 };
 
 }  // namespace wirelessCommunication
+#endif

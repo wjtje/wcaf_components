@@ -1,3 +1,4 @@
+#if defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
 #include "helpers.h"
 
 namespace wirelessCommunication {
@@ -71,3 +72,4 @@ const char *esp_err_to_string(int32_t err) {
 
 }  // namespace helpers
 }  // namespace wirelessCommunication
+#endif
