@@ -74,7 +74,7 @@ void Uart::loop() {
   }
 
   // Check for buffer overflow
-  if (this->buffer_pos_ >= 128) {
+  if (this->buffer_pos_ >= this->buffer_size_) {
     WCAF_LOG("To much data");
 #ifdef ARDUINO_AVR_UNO
     this->on_error_(data_error::LENGTH_ERROR, this->argument_);
