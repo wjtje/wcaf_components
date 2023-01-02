@@ -14,6 +14,7 @@ class Uart : public CommunicationInterface {
   void set_buffer_size(uint8_t size) { this->buffer_size_ = size; }
   void set_serial(HardwareSerial *serial) { this->serial_ = serial; }
   void set_speed(unsigned long speed) { this->speed_ = speed; }
+  void set_init_serial(bool init_serial) { this->init_serial_ = init_serial; }
 
   void send(const uint8_t *data, const uint8_t *addr);
 #ifdef ARDUINO_AVR_UNO
@@ -39,6 +40,7 @@ class Uart : public CommunicationInterface {
 
   HardwareSerial *serial_;
   unsigned long speed_;
+  bool init_serial_{true};
 
   // Buffer
   uint8_t buffer_size_;

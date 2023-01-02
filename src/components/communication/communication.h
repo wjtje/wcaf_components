@@ -1,4 +1,5 @@
 #pragma once
+#include <wcaf/components/interval/interval.h>
 #include <wcaf/core/component.h>
 #include <wcaf/core/log.h>
 #include <wcaf/helpers/list.h>
@@ -15,6 +16,8 @@ static const uint8_t BROADCAST_ADDRESS[8] = {0xFF, 0xFF, 0xFF,
                                              0xFF, 0xFF, 0xFF};
 static const uint8_t HEADER_SIZE = 8;
 static const uint8_t START_BYTE = 0x55;
+static const uint8_t REQ_BYTE = 0x56;
+static const uint8_t ACK_BYTE = 0x57;
 
 enum data_error : uint8_t { TIMEOUT, READ_ERROR, CRC_ERROR, LENGTH_ERROR };
 
@@ -40,7 +43,18 @@ class Communication : public Component {
     this->interface_ = interface;
   }
 
-  void send_message(const uint16_t type, const uint8_t *data,
+  /**
+   * @brief Send data using the communication interface to an other device.
+   *
+   * @param type 2 bytes of data indicating the type of data you're sending,
+   * this can be anything you want (excluding 0)
+   * @param data A pointer to data you want to send
+   * @param length The length of data. The maximum is buffer size - header size
+   * @param addr The address receiving the data, defaults to broadcast
+   * @return true The message is being send
+   * @return false Couldn't send your message
+   */
+  bool send_message(const uint16_t type, const uint8_t *data,
                     const uint8_t length,
                     const uint8_t *addr = BROADCAST_ADDRESS);
 #ifdef ARDUINO_AVR_UNO
@@ -55,16 +69,31 @@ class Communication : public Component {
   void on_error(std::function<void(const uint8_t error)> &&lambda);
 #endif
 
+  bool is_receiving() { return this->is_receiving_; }
+  bool is_sending() { return this->is_sending_; }
+
  protected:
   void on_error_(uint8_t error);
+  /**
+   * @brief Send a single byte to the communication interface
+   *
+   * @param byte
+   */
+  void send_byte_(const uint8_t byte);
 
   CommunicationInterface *interface_;
+  interval::Interval *req_interval_;
 
   // Buffers
   uint8_t buffer_size_{128};
 
   uint8_t *send_buffer_;
   uint8_t send_buffer_pos_{0};
+  uint8_t send_addr_[6];
+
+  // Communication states
+  bool is_sending_{false};
+  bool is_receiving_{false};
 
 // Callbacks
 #ifdef ARDUINO_AVR_UNO
@@ -113,6 +142,7 @@ namespace helpers {
 
 uint16_t crc(const uint8_t *data, uint8_t length);
 char *mac_addr_to_string(const uint8_t *mac_addr);
+const char *error_to_string(uint8_t error);
 
 }  // namespace helpers
 

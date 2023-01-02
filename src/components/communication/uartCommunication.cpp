@@ -12,7 +12,7 @@ void Uart::setup() {
     return;
   }
 
-  this->serial_->begin(115200);
+  if (this->init_serial_) this->serial_->begin(this->speed_);
 }
 
 void Uart::loop() {
@@ -49,6 +49,17 @@ void Uart::loop() {
   // Save to buffer
   this->buffer_[this->buffer_pos_] = (uint8_t)(unsigned int)incomming_byte;
   this->buffer_pos_++;
+
+  // Check for REQ and ACK byes
+  if (this->buffer_[0] == REQ_BYTE || this->buffer_[0] == ACK_BYTE) {
+#ifdef ARDUINO_AVR_UNO
+    this->on_data_(this->buffer_, BROADCAST_ADDRESS, this->argument_);
+#elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
+    this->on_data_(this->buffer_, BROADCAST_ADDRESS);
+#endif
+    this->reset_buffer_();
+    return;
+  }
 
   // Check if start byte is correct
   if (this->buffer_[0] != START_BYTE) {

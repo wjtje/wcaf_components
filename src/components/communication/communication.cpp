@@ -12,6 +12,7 @@ void Communication::setup() {
     return;
   }
 
+  // Setup interface
   this->interface_->set_buffer_size(this->buffer_size_);
   this->interface_->setup();
 #ifdef ARDUINO_AVR_UNO
@@ -23,6 +24,19 @@ void Communication::setup() {
   this->interface_->on_data([this](const uint8_t *data, const uint8_t *addr) {
     auto comm = this;
 #endif
+    // Check for REQ and ACK
+    if (data[0] == REQ_BYTE) {
+      comm->send_byte_(ACK_BYTE);
+      comm->is_receiving_ = true;
+      return;
+    } else if (data[0] == ACK_BYTE) {
+      comm->is_sending_ = false;
+      comm->interface_->send(comm->send_buffer_, comm->send_addr_);
+      return;
+    }
+
+    comm->is_receiving_ = false;
+
     // Get information from header
     uint8_t length = data[1];
     uint16_t crc_r = data[2] << 8 | data[3];
@@ -58,16 +72,41 @@ void Communication::setup() {
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
   this->interface_->on_error([this](uint8_t error) { this->on_error_(error); });
 #endif
+
+  // Setup REQ interval
+  this->req_interval_ = new interval::Interval();
+  this->req_interval_->set_interval(1);
+#ifdef ARDUINO_AVR_UNO
+  this->req_interval_->set_argument(this);
+  this->req_interval_->set_callback([](void *argument) {
+    auto comm = (Communication *)argument;
+#elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
+  this->req_interval_->set_callback([this]() {
+    auto comm = this;
+#endif
+    comm->send_byte_(REQ_BYTE);
+  });
 }
 
-void Communication::loop() { this->interface_->loop(); }
+void Communication::loop() {
+  this->interface_->loop();
+  if (this->is_sending_) this->req_interval_->loop();
+}
 
-void Communication::send_message(const uint16_t type, const uint8_t *data,
+bool Communication::send_message(const uint16_t type, const uint8_t *data,
                                  const uint8_t length, const uint8_t *addr) {
   if (length > this->buffer_size_ - HEADER_SIZE) {
     WCAF_LOG("Message is to large");
-    return;
+    return false;
   }
+
+  if (this->is_sending_) {
+    WCAF_LOG("Still sending message");
+    return false;
+  }
+
+  this->is_sending_ = true;
+
   auto crc = helpers::crc(data, length);
 
   // Create header
@@ -78,9 +117,11 @@ void Communication::send_message(const uint16_t type, const uint8_t *data,
   this->send_buffer_[4] = type >> 8;
   this->send_buffer_[5] = type;
 
+  // Store data in buffers
   memcpy(this->send_buffer_ + HEADER_SIZE, data, length);
+  memcpy(this->send_addr_, addr, 6);
 
-  this->interface_->send(this->send_buffer_, addr);
+  return true;
 }
 
 #ifdef ARDUINO_AVR_UNO
@@ -129,7 +170,21 @@ void Communication::on_error(std::function<void(uint8_t error)> &&lambda) {
 #endif
 
 void Communication::on_error_(uint8_t error) {
-  WCAF_LOG("Communication error %u", error);
+  WCAF_LOG("Communication %s", helpers::error_to_string(error));
+
+  for (auto callback : this->err_callbacks_) {
+    callback(error);
+  }
+}
+
+void Communication::send_byte_(const uint8_t byte) {
+  auto message = (uint8_t *)malloc(2);
+  message[0] = byte;
+  message[1] = 1;
+
+  this->interface_->send(message, this->send_addr_);
+
+  delete message;
 }
 
 namespace helpers {
@@ -155,6 +210,22 @@ char *mac_addr_to_string(const uint8_t *mac_addr) {
            "%02x:%02x:%02x:%02x:%02x:%02x", mac_addr[0], mac_addr[1],
            mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
   return mac_addr_buff_;
+}
+
+const char *error_to_string(uint8_t error) {
+  switch (error) {
+    case 0:
+      return "data timeout";
+    case 1:
+      return "read error";
+    case 2:
+      return "crc error";
+    case 3:
+      return "incorrect length";
+
+    default:
+      return "unknown error";
+  }
 }
 
 }  // namespace helpers
