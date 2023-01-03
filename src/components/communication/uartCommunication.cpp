@@ -99,6 +99,7 @@ void Uart::loop() {
 
 void Uart::send(const uint8_t *data, const uint8_t *addr) {
   this->serial_->write(data, data[1]);
+  this->serial_->flush();
 }
 
 void Uart::reset_buffer_() {
