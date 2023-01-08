@@ -3,12 +3,13 @@
 namespace communication {
 
 const char *Communication::TAG = "Communication";
+// char buff_[512];  // Buffer is used for debug
 
 void Communication::setup() {
   this->send_buffer_ = (uint8_t *)malloc(this->buffer_size_);
 
   if (this->send_buffer_ == nullptr) {
-    WCAF_LOG("Couldn't allocate buffer, out of memory");
+    WCAF_LOG_ERROR("Couldn't allocate buffer, out of memory");
     return;
   }
 
@@ -24,21 +25,37 @@ void Communication::setup() {
   this->interface_->on_data([this](const uint8_t *data, const uint8_t *addr) {
     auto comm = this;
 #endif
+    // Calculate message length
+    uint8_t length = (data[0] == REQ_BYTE || data[0] == ACK_BYTE) ? 1 : data[1];
+
+    // DEBUG
+    // for (int i = 0; i < length; i++) {
+    //   snprintf(buff_ + (3 * i), 4, "%02x ", data[i]);
+    // }
+    // WCAF_LOG_DEFAULT("%s", buff_);
+
     // Check for REQ and ACK
     if (data[0] == REQ_BYTE) {
+      if (!(millis() - comm->is_receiving_ > comm->receive_timeout_)) return;
+      // WCAF_LOG_DEFAULT("REQ");
       comm->send_byte_(ACK_BYTE);
-      comm->is_receiving_ = true;
+      comm->is_receiving_ = millis();
       return;
     } else if (data[0] == ACK_BYTE) {
+      // WCAF_LOG_DEFAULT("ACK");
+      if (!comm->is_sending_) {
+        WCAF_LOG_WARNING("Received ACK, but not sending anything");
+        return;
+      }
+
       comm->is_sending_ = false;
       comm->interface_->send(comm->send_buffer_, comm->send_addr_);
       return;
     }
 
-    comm->is_receiving_ = false;
+    comm->is_receiving_ = 0;
 
     // Get information from header
-    uint8_t length = data[1];
     uint16_t crc_r = data[2] << 8 | data[3];
     uint16_t type = data[4] << 8 | data[5];
 
@@ -46,13 +63,14 @@ void Communication::setup() {
     auto crc = helpers::crc(data + HEADER_SIZE, length - HEADER_SIZE);
 
     if (crc != crc_r) {
-      WCAF_LOG("Invalid CRC: Received '%02X', Calculated '%02X'", crc_r, crc);
+      WCAF_LOG_ERROR("Invalid CRC: Received '%02X', Calculated '%02X'", crc_r,
+                     crc);
       comm->on_error_(data_error::CRC_ERROR);
       return;
     }
 
-    WCAF_LOG("Received %u bytes from %s with type %u", length,
-             helpers::mac_addr_to_string(addr), type);
+    WCAF_LOG_INFO("Received %u bytes from %s with type %u", length,
+                  helpers::mac_addr_to_string(addr), type);
 
     for (auto callback : comm->recv_callbacks_) {
       if (callback->type == type || callback->type == 0)
@@ -84,6 +102,7 @@ void Communication::setup() {
   this->req_interval_->set_callback([this]() {
     auto comm = this;
 #endif
+    // WCAF_LOG_DEFAULT("Sending REQ");
     comm->send_byte_(REQ_BYTE);
   });
 }
@@ -96,12 +115,12 @@ void Communication::loop() {
 bool Communication::send_message(const uint16_t type, const uint8_t *data,
                                  const uint8_t length, const uint8_t *addr) {
   if (length > this->buffer_size_ - HEADER_SIZE) {
-    WCAF_LOG("Message is to large");
+    WCAF_LOG_WARNING("Message is to large");
     return false;
   }
 
   if (this->is_sending_) {
-    WCAF_LOG("Still sending message");
+    WCAF_LOG_WARNING("Still sending message");
     return false;
   }
 
@@ -133,7 +152,7 @@ void Communication::on_message(uint16_t type, void *argument,
   auto tmp = (recv_callback_struct_ *)malloc(sizeof(recv_callback_struct_));
 
   if (tmp == nullptr) {
-    WCAF_LOG("Could not register on_message callback, out of memory");
+    WCAF_LOG_ERROR("Could not register on_message callback, out of memory");
     return;
   }
 
@@ -154,7 +173,7 @@ void Communication::on_message(
   auto tmp = (recv_callback_struct_ *)malloc(sizeof(recv_callback_struct_));
 
   if (tmp == nullptr) {
-    WCAF_LOG("Could not register on_message callback, out of memory");
+    WCAF_LOG_ERROR("Could not register on_message callback, out of memory");
     return;
   }
 
@@ -170,7 +189,7 @@ void Communication::on_error(std::function<void(uint8_t error)> &&lambda) {
 #endif
 
 void Communication::on_error_(uint8_t error) {
-  WCAF_LOG("Communication %s", helpers::error_to_string(error));
+  WCAF_LOG_ERROR("Communication %s", helpers::error_to_string(error));
 
   for (auto callback : this->err_callbacks_) {
     callback(error);

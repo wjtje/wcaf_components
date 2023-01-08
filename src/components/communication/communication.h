@@ -69,7 +69,7 @@ class Communication : public Component {
   void on_error(std::function<void(const uint8_t error)> &&lambda);
 #endif
 
-  bool is_receiving() { return this->is_receiving_; }
+  bool is_receiving() { return this->is_receiving_ != 0; }
   bool is_sending() { return this->is_sending_; }
 
  protected:
@@ -93,8 +93,9 @@ class Communication : public Component {
 
   // Communication states
   bool is_sending_{false};
-  bool is_receiving_{false};
+  uint32_t is_receiving_{0};
 
+  uint32_t receive_timeout_{10};
 // Callbacks
 #ifdef ARDUINO_AVR_UNO
   struct recv_callback_struct_ {

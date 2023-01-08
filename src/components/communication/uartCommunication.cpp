@@ -8,7 +8,7 @@ const char *Uart::TAG = "Uart";
 void Uart::setup() {
   this->buffer_ = (uint8_t *)malloc(this->buffer_size_);
   if (this->buffer_ == nullptr) {
-    WCAF_LOG("Couldn't allocate buffer, out of memory");
+    WCAF_LOG_ERROR("Couldn't allocate buffer, out of memory");
     return;
   }
 
@@ -28,72 +28,71 @@ void Uart::loop() {
   }
 
   // Check if data is available
-  if (this->serial_->available() <= 0) return;
-
-  // Read byte
-  int incomming_byte = this->serial_->read();
-  if (incomming_byte < 0) {
-    WCAF_LOG("Tried to read bytes, but there wasn't anything to read");
+  int available = this->serial_->available();
+  while (available > 0) {
+    // Read byte
+    int incomming_byte = this->serial_->read();
+    if (incomming_byte < 0) {
+      WCAF_LOG_WARNING(
+          "Tried to read bytes, but there wasn't anything to read");
 #ifdef ARDUINO_AVR_UNO
-    this->on_error_(data_error::READ_ERROR, this->argument_);
+      this->on_error_(data_error::READ_ERROR, this->argument_);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
-    this->on_error_(data_error::READ_ERROR);
+      this->on_error_(data_error::READ_ERROR);
 #endif
-    return;
-  }
+      return;
+    }
 
-  // Update state
-  this->is_receiving_ = true;
-  this->last_time_ = millis();
+    // Update state
+    this->is_receiving_ = true;
+    this->last_time_ = millis();
+    available--;
 
-  // Save to buffer
-  this->buffer_[this->buffer_pos_] = (uint8_t)(unsigned int)incomming_byte;
-  this->buffer_pos_++;
+    // Save to buffer
+    this->buffer_[this->buffer_pos_] = (uint8_t)(unsigned int)incomming_byte;
+    this->buffer_pos_++;
 
-  // Check for REQ and ACK byes
-  if (this->buffer_[0] == REQ_BYTE || this->buffer_[0] == ACK_BYTE) {
+    // Check for REQ and ACK byes
+    if (this->buffer_[0] == REQ_BYTE || this->buffer_[0] == ACK_BYTE) {
 #ifdef ARDUINO_AVR_UNO
-    this->on_data_(this->buffer_, BROADCAST_ADDRESS, this->argument_);
+      this->on_data_(this->buffer_, BROADCAST_ADDRESS, this->argument_);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
-    this->on_data_(this->buffer_, BROADCAST_ADDRESS);
+      this->on_data_(this->buffer_, BROADCAST_ADDRESS);
 #endif
-    this->reset_buffer_();
-    return;
-  }
+      this->reset_buffer_();
+      continue;
+    }
 
-  // Check if start byte is correct
-  if (this->buffer_[0] != START_BYTE) {
-    this->reset_buffer_();
-    return;
-  }
+    // Check if start byte is correct
+    if (this->buffer_[0] != START_BYTE) {
+      this->reset_buffer_();
+      continue;
+    }
 
-  // DEBUG Serial communication
-  // Serial.printf("%u: %02X\n", this->buffer_pos_ - 1,
-  //               (unsigned int)incomming_byte);
+    if (this->buffer_pos_ <= 1) continue;
 
-  if (this->buffer_pos_ <= 1) return;
-
-  // Check if the correct amount of bytes are received
-  if (this->buffer_[1] == this->buffer_pos_ && this->buffer_pos_ > 0) {
+    // Check if the correct amount of bytes are received
+    if (this->buffer_[1] == this->buffer_pos_ && this->buffer_pos_ > 0) {
 #ifdef ARDUINO_AVR_UNO
-    this->on_data_(this->buffer_, BROADCAST_ADDRESS, this->argument_);
+      this->on_data_(this->buffer_, BROADCAST_ADDRESS, this->argument_);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
-    this->on_data_(this->buffer_, BROADCAST_ADDRESS);
+      this->on_data_(this->buffer_, BROADCAST_ADDRESS);
 #endif
-    this->reset_buffer_();
-    return;
-  }
+      this->reset_buffer_();
+      continue;
+    }
 
-  // Check for buffer overflow
-  if (this->buffer_pos_ >= this->buffer_size_) {
-    WCAF_LOG("To much data");
+    // Check for buffer overflow
+    if (this->buffer_pos_ >= this->buffer_size_) {
+      WCAF_LOG_ERROR("To much data");
 #ifdef ARDUINO_AVR_UNO
-    this->on_error_(data_error::LENGTH_ERROR, this->argument_);
+      this->on_error_(data_error::LENGTH_ERROR, this->argument_);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
-    this->on_error_(data_error::LENGTH_ERROR);
+      this->on_error_(data_error::LENGTH_ERROR);
 #endif
-    this->reset_buffer_();
-    return;
+      this->reset_buffer_();
+      continue;
+    }
   }
 }
 
