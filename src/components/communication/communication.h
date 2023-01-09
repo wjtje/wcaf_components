@@ -4,8 +4,13 @@
 #include <wcaf/core/log.h>
 #include <wcaf/helpers/list.h>
 
+#if defined(ARDUINO_ARCH_ESP8266)
+#include <list>
+#endif
+
 #if defined(ARDUINO_ESP32_DEV)
 #include <functional>
+#include <list>
 #endif
 
 using namespace wcaf;
@@ -31,13 +36,12 @@ class Communication : public Component {
   static const char *TAG;
 
   /**
-   * @brief Set the size of the receive and send buffer.
-   * The max message length is calculate by the buffer size minus 8 bytes
-   * for the header.
+   * @brief Sets the maximum size of a single message (the first 8 bytes are
+   * used by the header).
    *
    * @param size
    */
-  void set_buffer_size(uint8_t size) { this->buffer_size_ = size; };
+  void max_message_length(uint8_t size) { this->max_message_length_ = size; };
 
   /**
    * @brief Set the maximum millisecondes between the REQ and the actual
@@ -48,6 +52,14 @@ class Communication : public Component {
   void set_receive_timeout(uint32_t timeout) {
     this->receive_timeout_ = timeout;
   }
+
+  /**
+   * @brief Sets the maximum amount of message inside the queue at any given
+   * moment.
+   *
+   * @param size
+   */
+  void set_message_queue(uint8_t size) { this->max_queue_length_ = size; }
 
   void set_communication_interface(CommunicationInterface *interface) {
     this->interface_ = interface;
@@ -84,7 +96,7 @@ class Communication : public Component {
       this->is_receiving_ = 0;
     return this->is_receiving_ != 0;
   }
-  bool is_sending() { return this->is_sending_; }
+  bool is_sending() { return this->message_queue_.size() > 0; }
 
  protected:
   void on_error_(uint8_t error);
@@ -99,14 +111,20 @@ class Communication : public Component {
   interval::Interval *req_interval_;
 
   // Buffers
-  uint8_t buffer_size_{128};
+  uint8_t max_message_length_{128};
+  uint8_t max_queue_length_{5};
 
-  uint8_t *send_buffer_;
-  uint8_t send_buffer_pos_{0};
-  uint8_t send_addr_[6];
+  struct message_ {
+    uint8_t addr[6];
+    uint8_t *data;
+  };
+#ifdef ARDUINO_AVR_UNO
+  list::List<message_ *> message_queue_;
+#elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
+  std::list<message_ *> message_queue_;
+#endif
 
   // Communication states
-  bool is_sending_{false};
   uint32_t is_receiving_{0};
 
   uint32_t receive_timeout_{10};

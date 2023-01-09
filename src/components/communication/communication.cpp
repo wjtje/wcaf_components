@@ -6,15 +6,8 @@ const char *Communication::TAG = "Communication";
 // char buff_[512];  // Buffer is used for debug
 
 void Communication::setup() {
-  this->send_buffer_ = (uint8_t *)malloc(this->buffer_size_);
-
-  if (this->send_buffer_ == nullptr) {
-    WCAF_LOG_ERROR("Couldn't allocate buffer, out of memory");
-    return;
-  }
-
   // Setup interface
-  this->interface_->set_buffer_size(this->buffer_size_);
+  this->interface_->set_buffer_size(this->max_message_length_);
   this->interface_->setup();
 #ifdef ARDUINO_AVR_UNO
   this->interface_->set_argument(this);
@@ -43,13 +36,16 @@ void Communication::setup() {
       return;
     } else if (data[0] == ACK_BYTE) {
       // WCAF_LOG_DEFAULT("ACK");
-      if (!comm->is_sending_) {
+      if (!comm->is_sending()) {
         WCAF_LOG_WARNING("Received ACK, but not sending anything");
         return;
       }
 
-      comm->is_sending_ = false;
-      comm->interface_->send(comm->send_buffer_, comm->send_addr_);
+      auto message = *comm->message_queue_.begin();
+      comm->interface_->send(message->data, message->addr);
+      delete message->data;
+      delete message;
+      comm->message_queue_.erase(comm->message_queue_.begin());
       return;
     }
 
@@ -109,36 +105,41 @@ void Communication::setup() {
 
 void Communication::loop() {
   this->interface_->loop();
-  if (this->is_sending_) this->req_interval_->loop();
+  if (this->is_sending()) this->req_interval_->loop();
 }
 
 bool Communication::send_message(const uint16_t type, const uint8_t *data,
                                  const uint8_t length, const uint8_t *addr) {
-  if (length > this->buffer_size_ - HEADER_SIZE) {
+  if (length > this->max_message_length_ - HEADER_SIZE) {
     WCAF_LOG_WARNING("Message is to large");
     return false;
   }
 
-  if (this->is_sending_) {
-    WCAF_LOG_WARNING("Still sending message");
+  if (this->message_queue_.size() >= this->max_queue_length_) {
+    WCAF_LOG_WARNING("Message queue is full");
     return false;
   }
 
-  this->is_sending_ = true;
-
-  auto crc = helpers::crc(data, length);
+  // Allocate buffer
+  auto buff = (uint8_t *)malloc(length + HEADER_SIZE);
+  auto message = (message_ *)malloc(sizeof(message_));
 
   // Create header
-  this->send_buffer_[0] = START_BYTE;
-  this->send_buffer_[1] = length + HEADER_SIZE;
-  this->send_buffer_[2] = crc >> 8;
-  this->send_buffer_[3] = crc;
-  this->send_buffer_[4] = type >> 8;
-  this->send_buffer_[5] = type;
+  auto crc = helpers::crc(data, length);
+
+  buff[0] = START_BYTE;
+  buff[1] = length + HEADER_SIZE;
+  buff[2] = crc >> 8;
+  buff[3] = crc;
+  buff[4] = type >> 8;
+  buff[5] = type;
 
   // Store data in buffers
-  memcpy(this->send_buffer_ + HEADER_SIZE, data, length);
-  memcpy(this->send_addr_, addr, 6);
+  memcpy(buff + HEADER_SIZE, data, length);
+  memcpy(message->addr, addr, 6);
+  message->data = buff;
+
+  this->message_queue_.push_back(message);
 
   return true;
 }
@@ -201,7 +202,7 @@ void Communication::send_byte_(const uint8_t byte) {
   message[0] = byte;
   message[1] = 1;
 
-  this->interface_->send(message, this->send_addr_);
+  this->interface_->send(message, (*this->message_queue_.begin())->addr);
 
   delete message;
 }
