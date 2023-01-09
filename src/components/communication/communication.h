@@ -39,6 +39,16 @@ class Communication : public Component {
    */
   void set_buffer_size(uint8_t size) { this->buffer_size_ = size; };
 
+  /**
+   * @brief Set the maximum millisecondes between the REQ and the actual
+   * message.
+   *
+   * @param timeout
+   */
+  void set_receive_timeout(uint32_t timeout) {
+    this->receive_timeout_ = timeout;
+  }
+
   void set_communication_interface(CommunicationInterface *interface) {
     this->interface_ = interface;
   }
@@ -69,7 +79,11 @@ class Communication : public Component {
   void on_error(std::function<void(const uint8_t error)> &&lambda);
 #endif
 
-  bool is_receiving() { return this->is_receiving_ != 0; }
+  bool is_receiving() {
+    if (!(millis() - this->is_receiving_ > this->receive_timeout_))
+      this->is_receiving_ = 0;
+    return this->is_receiving_ != 0;
+  }
   bool is_sending() { return this->is_sending_; }
 
  protected:
