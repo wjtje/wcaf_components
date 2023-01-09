@@ -9,7 +9,7 @@ void Communication::setup() {
   // Setup interface
   this->interface_->set_buffer_size(this->max_message_length_);
   this->interface_->setup();
-#ifdef ARDUINO_AVR_UNO
+#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
   this->interface_->set_argument(this);
   this->interface_->on_data([](const uint8_t *data, const uint8_t *addr,
                                void *argument) {
@@ -70,15 +70,15 @@ void Communication::setup() {
 
     for (auto callback : comm->recv_callbacks_) {
       if (callback->type == type || callback->type == 0)
-#ifdef ARDUINO_AVR_UNO
-        callback->lambda(data + HEADER_SIZE, length, addr, callback->argument);
+#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
+        callback->lambda(data + HEADER_SIZE, length - HEADER_SIZE, addr, callback->argument);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
-        callback->lambda(data + HEADER_SIZE, length, addr);
+        callback->lambda(data + HEADER_SIZE, length - HEADER_SIZE, addr);
 #endif
     }
   });
 
-#ifdef ARDUINO_AVR_UNO
+#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
   this->interface_->on_error([](uint8_t error, void *argument) {
     auto comm = (Communication *)argument;
     comm->on_error_(error);
@@ -90,7 +90,7 @@ void Communication::setup() {
   // Setup REQ interval
   this->req_interval_ = new interval::Interval();
   this->req_interval_->set_interval(1);
-#ifdef ARDUINO_AVR_UNO
+#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
   this->req_interval_->set_argument(this);
   this->req_interval_->set_callback([](void *argument) {
     auto comm = (Communication *)argument;
@@ -124,6 +124,13 @@ bool Communication::send_message(const uint16_t type, const uint8_t *data,
   auto buff = (uint8_t *)malloc(length + HEADER_SIZE);
   auto message = (message_ *)malloc(sizeof(message_));
 
+  if (buff == nullptr || message == nullptr) {
+    WCAF_LOG_ERROR("Couldn't send message, out of memory");
+    return false;
+  }
+
+  // WCAF_LOG_DEFAULT("Sending %i bytes", length);
+
   // Create header
   auto crc = helpers::crc(data, length);
 
@@ -144,7 +151,7 @@ bool Communication::send_message(const uint16_t type, const uint8_t *data,
   return true;
 }
 
-#ifdef ARDUINO_AVR_UNO
+#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
 void Communication::on_message(uint16_t type, void *argument,
                                void (*lambda)(const uint8_t *data,
                                               const uint8_t length,

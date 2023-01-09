@@ -79,7 +79,7 @@ class Communication : public Component {
   bool send_message(const uint16_t type, const uint8_t *data,
                     const uint8_t length,
                     const uint8_t *addr = BROADCAST_ADDRESS);
-#ifdef ARDUINO_AVR_UNO
+#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
   void on_message(uint16_t type, void *argument,
                   void (*lambda)(const uint8_t *data, const uint8_t length,
                                  const uint8_t *addr, void *argument));
@@ -118,7 +118,7 @@ class Communication : public Component {
     uint8_t addr[6];
     uint8_t *data;
   };
-#ifdef ARDUINO_AVR_UNO
+#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
   list::List<message_ *> message_queue_;
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
   std::list<message_ *> message_queue_;
@@ -129,7 +129,7 @@ class Communication : public Component {
 
   uint32_t receive_timeout_{10};
 // Callbacks
-#ifdef ARDUINO_AVR_UNO
+#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
   struct recv_callback_struct_ {
     uint16_t type;
     void *argument;
@@ -156,7 +156,7 @@ class CommunicationInterface : public Component {
  public:
   virtual void set_buffer_size(uint8_t size);
   virtual void send(const uint8_t *data, const uint8_t *addr);
-#ifdef ARDUINO_AVR_UNO
+#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
   void set_argument(void *argument) { this->argument_ = argument; }
   virtual void on_data(void (*lambda)(const uint8_t *data, const uint8_t *addr,
                                       void *argument));

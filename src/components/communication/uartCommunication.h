@@ -17,7 +17,7 @@ class Uart : public CommunicationInterface {
   void set_init_serial(bool init_serial) { this->init_serial_ = init_serial; }
 
   void send(const uint8_t *data, const uint8_t *addr);
-#ifdef ARDUINO_AVR_UNO
+#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
   void on_data(void (*lambda)(const uint8_t *data, const uint8_t *addr,
                               void *argument)) {
     this->on_data_ = lambda;
@@ -52,7 +52,7 @@ class Uart : public CommunicationInterface {
   uint16_t data_timeout_{10};
 
   // Callbacks
-#ifdef ARDUINO_AVR_UNO
+#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
   void (*on_data_)(const uint8_t *data, const uint8_t *addr, void *argument);
   void (*on_error_)(uint8_t error, void *argument);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)

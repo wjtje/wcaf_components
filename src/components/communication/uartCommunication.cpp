@@ -19,7 +19,7 @@ void Uart::loop() {
   // Check last time data read
   if (this->is_receiving_ &&
       millis() - this->last_time_ > this->data_timeout_) {
-#ifdef ARDUINO_AVR_UNO
+#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
     this->on_error_(data_error::TIMEOUT, this->argument_);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
     this->on_error_(data_error::TIMEOUT);
@@ -35,7 +35,7 @@ void Uart::loop() {
     if (incomming_byte < 0) {
       WCAF_LOG_WARNING(
           "Tried to read bytes, but there wasn't anything to read");
-#ifdef ARDUINO_AVR_UNO
+#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
       this->on_error_(data_error::READ_ERROR, this->argument_);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
       this->on_error_(data_error::READ_ERROR);
@@ -54,7 +54,7 @@ void Uart::loop() {
 
     // Check for REQ and ACK byes
     if (this->buffer_[0] == REQ_BYTE || this->buffer_[0] == ACK_BYTE) {
-#ifdef ARDUINO_AVR_UNO
+#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
       this->on_data_(this->buffer_, BROADCAST_ADDRESS, this->argument_);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
       this->on_data_(this->buffer_, BROADCAST_ADDRESS);
@@ -73,7 +73,7 @@ void Uart::loop() {
 
     // Check if the correct amount of bytes are received
     if (this->buffer_[1] == this->buffer_pos_ && this->buffer_pos_ > 0) {
-#ifdef ARDUINO_AVR_UNO
+#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
       this->on_data_(this->buffer_, BROADCAST_ADDRESS, this->argument_);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
       this->on_data_(this->buffer_, BROADCAST_ADDRESS);
@@ -85,7 +85,7 @@ void Uart::loop() {
     // Check for buffer overflow
     if (this->buffer_pos_ >= this->buffer_size_) {
       WCAF_LOG_ERROR("To much data");
-#ifdef ARDUINO_AVR_UNO
+#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
       this->on_error_(data_error::LENGTH_ERROR, this->argument_);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
       this->on_error_(data_error::LENGTH_ERROR);
