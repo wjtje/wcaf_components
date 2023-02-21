@@ -68,31 +68,30 @@ class Communication : public Component {
   /**
    * @brief Send data using the communication interface to an other device.
    *
-   * @param type 2 bytes of data indicating the type of data you're sending,
-   * this can be anything you want (excluding 0)
+   * @param id A 4 byte number to indicate what kind of message you are sending.
    * @param data A pointer to data you want to send
    * @param length The length of data. The maximum is buffer size - header size
    * @param addr The address receiving the data, defaults to broadcast
    * @return true The message is being send
    * @return false Couldn't send your message
    */
-  bool send_message(const uint16_t type, const uint8_t *data,
+  bool send_message(const uint32_t id, const uint8_t *data,
                     const uint8_t length,
                     const uint8_t *addr = BROADCAST_ADDRESS);
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
-  void on_message(uint16_t type, void *argument,
+  void on_message(uint32_t id, void *argument,
                   void (*lambda)(const uint8_t *data, const uint8_t length,
                                  const uint8_t *addr, void *argument));
   void on_error(void (*lambda)(uint8_t error));
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
-  void on_message(uint16_t type,
+  void on_message(uint32_t id,
                   std::function<void(const uint8_t *data, const uint8_t length,
                                      const uint8_t *addr)> &&lambda);
   void on_error(std::function<void(const uint8_t error)> &&lambda);
 #endif
 
   bool is_receiving() {
-    if (!(millis() - this->is_receiving_ > this->receive_timeout_))
+    if (millis() - this->is_receiving_ > this->receive_timeout_)
       this->is_receiving_ = 0;
     return this->is_receiving_ != 0;
   }
@@ -131,7 +130,7 @@ class Communication : public Component {
 // Callbacks
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
   struct recv_callback_struct_ {
-    uint16_t type;
+    uint32_t id;
     void *argument;
     void (*lambda)(const uint8_t *data, const uint8_t length,
                    const uint8_t *addr, void *argument);
@@ -141,7 +140,7 @@ class Communication : public Component {
   list::List<void (*)(uint8_t error)> err_callbacks_;
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
   struct recv_callback_struct_ {
-    uint16_t type;
+    uint32_t id;
     std::function<void(const uint8_t *data, const uint8_t length,
                        const uint8_t *addr)>
         lambda;

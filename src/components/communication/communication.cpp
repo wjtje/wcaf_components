@@ -53,7 +53,8 @@ void Communication::setup() {
 
     // Get information from header
     uint16_t crc_r = data[2] << 8 | data[3];
-    uint16_t type = data[4] << 8 | data[5];
+    uint32_t id = (uint32_t)(data[4]) << 24 | (uint32_t)(data[5]) << 16 |
+                  data[6] << 8 | data[7];
 
     // Check CRC
     auto crc = helpers::crc(data + HEADER_SIZE, length - HEADER_SIZE);
@@ -65,13 +66,14 @@ void Communication::setup() {
       return;
     }
 
-    WCAF_LOG_INFO("Received %u bytes from %s with type %u", length,
-                  helpers::mac_addr_to_string(addr), type);
+    WCAF_LOG_INFO("Received %u bytes from %s with id %lu", length,
+                  helpers::mac_addr_to_string(addr), id);
 
     for (auto callback : comm->recv_callbacks_) {
-      if (callback->type == type || callback->type == 0)
+      if (callback->id == id || callback->id == 0)
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
-        callback->lambda(data + HEADER_SIZE, length - HEADER_SIZE, addr, callback->argument);
+        callback->lambda(data + HEADER_SIZE, length - HEADER_SIZE, addr,
+                         callback->argument);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
         callback->lambda(data + HEADER_SIZE, length - HEADER_SIZE, addr);
 #endif
@@ -108,7 +110,7 @@ void Communication::loop() {
   if (this->is_sending()) this->req_interval_->loop();
 }
 
-bool Communication::send_message(const uint16_t type, const uint8_t *data,
+bool Communication::send_message(const uint32_t id, const uint8_t *data,
                                  const uint8_t length, const uint8_t *addr) {
   if (length > this->max_message_length_ - HEADER_SIZE) {
     WCAF_LOG_WARNING("Message is to large");
@@ -138,8 +140,10 @@ bool Communication::send_message(const uint16_t type, const uint8_t *data,
   buff[1] = length + HEADER_SIZE;
   buff[2] = crc >> 8;
   buff[3] = crc;
-  buff[4] = type >> 8;
-  buff[5] = type;
+  buff[4] = id >> 24;
+  buff[5] = id >> 16;
+  buff[6] = id >> 8;
+  buff[7] = id;
 
   // Store data in buffers
   memcpy(buff + HEADER_SIZE, data, length);
@@ -152,7 +156,7 @@ bool Communication::send_message(const uint16_t type, const uint8_t *data,
 }
 
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
-void Communication::on_message(uint16_t type, void *argument,
+void Communication::on_message(uint32_t id, void *argument,
                                void (*lambda)(const uint8_t *data,
                                               const uint8_t length,
                                               const uint8_t *addr,
@@ -165,7 +169,7 @@ void Communication::on_message(uint16_t type, void *argument,
   }
 
   tmp->argument = argument;
-  tmp->type = type;
+  tmp->id = id;
   tmp->lambda = lambda;
 
   this->recv_callbacks_.push_back(tmp);
@@ -176,8 +180,8 @@ void Communication::on_error(void (*lambda)(uint8_t error)) {
 }
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
 void Communication::on_message(
-    uint16_t type, std::function<void(const uint8_t *data, const uint8_t length,
-                                      const uint8_t *addr)> &&lambda) {
+    uint32_t id, std::function<void(const uint8_t *data, const uint8_t length,
+                                    const uint8_t *addr)> &&lambda) {
   auto tmp = (recv_callback_struct_ *)malloc(sizeof(recv_callback_struct_));
 
   if (tmp == nullptr) {
@@ -185,7 +189,7 @@ void Communication::on_message(
     return;
   }
 
-  tmp->type = type;
+  tmp->id = id;
   tmp->lambda = lambda;
 
   this->recv_callbacks_.push_back(tmp);
