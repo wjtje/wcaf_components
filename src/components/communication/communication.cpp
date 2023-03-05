@@ -18,6 +18,7 @@ void Communication::setup() {
   this->interface_->on_data([this](const uint8_t *data, const uint8_t *addr) {
     auto comm = this;
 #endif
+    comm->last_time_receiving_ = millis();
     // Calculate message length
     uint8_t length = (data[0] == REQ_BYTE || data[0] == ACK_BYTE) ? 1 : data[1];
 

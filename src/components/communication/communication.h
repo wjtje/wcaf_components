@@ -96,6 +96,7 @@ class Communication : public Component {
     return this->is_receiving_ != 0;
   }
   bool is_sending() { return this->message_queue_.size() > 0; }
+  uint32_t get_last_time_receiving() { return this->last_time_receiving_; }
 
  protected:
   void on_error_(uint8_t error);
@@ -125,6 +126,7 @@ class Communication : public Component {
 
   // Communication states
   uint32_t is_receiving_{0};
+  uint32_t last_time_receiving_{0};
 
   uint32_t receive_timeout_{10};
 // Callbacks
