@@ -67,8 +67,8 @@ void Communication::setup() {
       return;
     }
 
-    WCAF_LOG_INFO("Received %u bytes from %s with id %lu", length,
-                  helpers::mac_addr_to_string(addr), id);
+    // WCAF_LOG_DEFAULT("Received %u bytes from %s with id %lu", length,
+    //               helpers::mac_addr_to_string(addr), id);
 
     for (auto callback : comm->recv_callbacks_) {
       if (callback->id == id || callback->id == 0)
