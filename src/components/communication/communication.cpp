@@ -13,10 +13,10 @@ void Communication::setup() {
   this->interface_->set_argument(this);
   this->interface_->on_data([](const uint8_t *data, const uint8_t *addr,
                                void *argument) {
-    auto comm = (Communication *)argument;
+    Communication *comm = (Communication *)argument;
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
   this->interface_->on_data([this](const uint8_t *data, const uint8_t *addr) {
-    auto comm = this;
+    Communication *comm = this;
 #endif
     comm->last_time_receiving_ = millis();
     // Calculate message length
@@ -42,7 +42,7 @@ void Communication::setup() {
         return;
       }
 
-      auto message = *comm->message_queue_.begin();
+      message_ *message = *comm->message_queue_.begin();
       comm->interface_->send(message->data, message->addr);
       delete message->data;
       delete message;
@@ -58,7 +58,7 @@ void Communication::setup() {
                   data[6] << 8 | data[7];
 
     // Check CRC
-    auto crc = helpers::crc(data + HEADER_SIZE, length - HEADER_SIZE);
+    uint16_t crc = helpers::crc(data + HEADER_SIZE, length - HEADER_SIZE);
 
     if (crc != crc_r) {
       WCAF_LOG_ERROR("Invalid CRC: Received '%02X', Calculated '%02X'", crc_r,
@@ -70,7 +70,7 @@ void Communication::setup() {
     // WCAF_LOG_DEFAULT("Received %u bytes from %s with id %lu", length,
     //               helpers::mac_addr_to_string(addr), id);
 
-    for (auto callback : comm->recv_callbacks_) {
+    for (recv_callback_struct_ *callback : comm->recv_callbacks_) {
       if (callback->id == id || callback->id == 0)
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
         callback->lambda(data + HEADER_SIZE, length - HEADER_SIZE, addr,
@@ -83,7 +83,7 @@ void Communication::setup() {
 
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
   this->interface_->on_error([](uint8_t error, void *argument) {
-    auto comm = (Communication *)argument;
+    Communication *comm = (Communication *)argument;
     comm->on_error_(error);
   });
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
@@ -96,10 +96,10 @@ void Communication::setup() {
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
   this->req_interval_->set_argument(this);
   this->req_interval_->set_callback([](void *argument) {
-    auto comm = (Communication *)argument;
+    Communication *comm = (Communication *)argument;
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
   this->req_interval_->set_callback([this]() {
-    auto comm = this;
+    Communication *comm = this;
 #endif
     // WCAF_LOG_DEFAULT("Sending REQ");
     comm->send_byte_(REQ_BYTE);
@@ -124,8 +124,8 @@ bool Communication::send_message(const uint32_t id, const uint8_t *data,
   }
 
   // Allocate buffer
-  auto buff = (uint8_t *)malloc(length + HEADER_SIZE);
-  auto message = (message_ *)malloc(sizeof(message_));
+  uint8_t *buff = (uint8_t *)malloc(length + HEADER_SIZE);
+  message_ *message = (message_ *)malloc(sizeof(message_));
 
   if (buff == nullptr || message == nullptr) {
     WCAF_LOG_ERROR("Couldn't send message, out of memory");
@@ -135,7 +135,7 @@ bool Communication::send_message(const uint32_t id, const uint8_t *data,
   // WCAF_LOG_DEFAULT("Sending %i bytes", length);
 
   // Create header
-  auto crc = helpers::crc(data, length);
+  uint16_t crc = helpers::crc(data, length);
 
   buff[0] = START_BYTE;
   buff[1] = length + HEADER_SIZE;

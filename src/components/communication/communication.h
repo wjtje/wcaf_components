@@ -30,6 +30,11 @@ class CommunicationInterface;
 
 class Communication : public Component {
  public:
+  struct message_ {
+    uint8_t addr[6];
+    uint8_t *data;
+  };
+
   void setup();
   void loop();
   const char *get_tag() { return TAG; }
@@ -64,6 +69,10 @@ class Communication : public Component {
   void set_communication_interface(CommunicationInterface *interface) {
     this->interface_ = interface;
   }
+
+#if defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_AVR_MEGA2560)
+  list::List<message_ *> get_queue() { return this->message_queue_; }
+#endif
 
   /**
    * @brief Send data using the communication interface to an other device.
@@ -114,10 +123,6 @@ class Communication : public Component {
   uint8_t max_message_length_{128};
   uint8_t max_queue_length_{5};
 
-  struct message_ {
-    uint8_t addr[6];
-    uint8_t *data;
-  };
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
   list::List<message_ *> message_queue_;
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
