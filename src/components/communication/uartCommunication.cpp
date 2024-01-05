@@ -28,8 +28,11 @@ void Uart::loop() {
   }
 
   // Check if data is available
-  int available = this->serial_->available();
-  while (available > 0) {
+  unsigned long end_time = millis() + 150;
+  while (this->serial_->available()) {
+    // Stop after 150ms
+    if (millis() > end_time) break;
+
     // Read byte
     int incomming_byte = this->serial_->read();
     if (incomming_byte < 0) {
@@ -46,7 +49,6 @@ void Uart::loop() {
     // Update state
     this->is_receiving_ = true;
     this->last_time_ = millis();
-    available--;
 
     // Save to buffer
     this->buffer_[this->buffer_pos_] = (uint8_t)(unsigned int)incomming_byte;
