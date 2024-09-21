@@ -16,9 +16,11 @@ void Uart::setup() {
 }
 
 void Uart::loop() {
+  const uint32_t start_time = millis();
+
   // Check last time data read
   if (this->is_receiving_ &&
-      millis() - this->last_time_ > this->data_timeout_) {
+      start_time - this->last_time_ > this->data_timeout_) {
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
     this->on_error_(data_error::TIMEOUT, this->argument_);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
@@ -27,11 +29,8 @@ void Uart::loop() {
     this->reset_buffer_();
   }
 
-  // Check if data is available
-  unsigned long end_time = millis() + 150;
-  while (this->serial_->available()) {
-    // Stop after 150ms
-    if (millis() > end_time) break;
+  while (this->serial_->available() && (millis() - start_time < 50)) {
+    const uint32_t now = millis();
 
     // Read byte
     int incomming_byte = this->serial_->read();
@@ -48,7 +47,7 @@ void Uart::loop() {
 
     // Update state
     this->is_receiving_ = true;
-    this->last_time_ = millis();
+    this->last_time_ = now;
 
     // Save to buffer
     this->buffer_[this->buffer_pos_] = (uint8_t)(unsigned int)incomming_byte;
@@ -100,7 +99,7 @@ void Uart::loop() {
 
 void Uart::send(const uint8_t *data, const uint8_t *addr) {
   this->serial_->write(data, data[1]);
-  this->serial_->flush();
+  //   this->serial_->flush();
 }
 
 void Uart::reset_buffer_() {

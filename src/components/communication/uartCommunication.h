@@ -39,7 +39,7 @@ class Uart : public CommunicationInterface {
   void reset_buffer_();
 
   HardwareSerial *serial_;
-  unsigned long speed_;
+  unsigned long speed_{115200};
   bool init_serial_{true};
 
   // Buffer

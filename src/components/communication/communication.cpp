@@ -7,7 +7,7 @@ const char *Communication::TAG = "Communication";
 
 void Communication::setup() {
   // Setup interface
-  this->interface_->set_buffer_size(this->max_message_length_);
+  this->interface_->set_buffer_size(sizeof(t_Message::data));
   this->interface_->setup();
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
   this->interface_->set_argument(this);
@@ -30,23 +30,21 @@ void Communication::setup() {
 
     // Check for REQ and ACK
     if (data[0] == REQ_BYTE) {
-      if (!(millis() - comm->is_receiving_ > comm->receive_timeout_)) return;
+      if (!(comm->last_time_receiving_ - comm->is_receiving_ >
+            comm->receive_timeout_))
+        return;
       // WCAF_LOG_DEFAULT("REQ");
       comm->send_byte_(ACK_BYTE);
-      comm->is_receiving_ = millis();
+      comm->is_receiving_ = comm->last_time_receiving_;
       return;
     } else if (data[0] == ACK_BYTE) {
-      // WCAF_LOG_DEFAULT("ACK");
-      if (!comm->is_sending()) {
-        WCAF_LOG_WARNING("Received ACK, but not sending anything");
-        return;
+      if (!comm->message_queue_.empty()) {
+        const t_Message &message = comm->message_queue_.dpop();
+        comm->interface_->send(message.data, message.addr);
+      } else {
+        // WCAF_LOG_WARNING("Received ACK, but not sending anything");
       }
 
-      message_ *message = *comm->message_queue_.begin();
-      comm->interface_->send(message->data, message->addr);
-      delete message->data;
-      delete message;
-      comm->message_queue_.erase(comm->message_queue_.begin());
       return;
     }
 
@@ -89,69 +87,48 @@ void Communication::setup() {
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
   this->interface_->on_error([this](uint8_t error) { this->on_error_(error); });
 #endif
-
-  // Setup REQ interval
-  this->req_interval_ = new interval::Interval();
-  this->req_interval_->set_interval(1);
-#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
-  this->req_interval_->set_argument(this);
-  this->req_interval_->set_callback([](void *argument) {
-    Communication *comm = (Communication *)argument;
-#elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
-  this->req_interval_->set_callback([this]() {
-    Communication *comm = this;
-#endif
-    // WCAF_LOG_DEFAULT("Sending REQ");
-    comm->send_byte_(REQ_BYTE);
-  });
 }
 
 void Communication::loop() {
+  const uint32_t now = millis();
   this->interface_->loop();
-  if (this->is_sending()) this->req_interval_->loop();
+
+  if (!this->message_queue_.empty() && (now - this->last_req_ >= 1)) {
+    this->send_byte_(REQ_BYTE);
+  }
 }
 
 bool Communication::send_message(const uint32_t id, const uint8_t *data,
                                  const uint8_t length, const uint8_t *addr) {
-  if (length > this->max_message_length_ - HEADER_SIZE) {
+  if (length > sizeof(t_Message::data) - HEADER_SIZE) {
     WCAF_LOG_WARNING("Message is to large");
     return false;
   }
 
-  if (this->message_queue_.size() >= this->max_queue_length_) {
+  if (this->message_queue_.full()) {
     WCAF_LOG_WARNING("Message queue is full");
     return false;
   }
 
-  // Allocate buffer
-  uint8_t *buff = (uint8_t *)malloc(length + HEADER_SIZE);
-  message_ *message = (message_ *)malloc(sizeof(message_));
-
-  if (buff == nullptr || message == nullptr) {
-    WCAF_LOG_ERROR("Couldn't send message, out of memory");
-    return false;
-  }
-
-  // WCAF_LOG_DEFAULT("Sending %i bytes", length);
+  t_Message message;
+  memcpy(message.addr, addr, sizeof(message.addr));
 
   // Create header
   uint16_t crc = helpers::crc(data, length);
 
-  buff[0] = START_BYTE;
-  buff[1] = length + HEADER_SIZE;
-  buff[2] = crc >> 8;
-  buff[3] = crc;
-  buff[4] = id >> 24;
-  buff[5] = id >> 16;
-  buff[6] = id >> 8;
-  buff[7] = id;
+  message.data[0] = START_BYTE;
+  message.data[1] = length + HEADER_SIZE;
+  message.data[2] = crc >> 8;
+  message.data[3] = crc;
+  message.data[4] = id >> 24;
+  message.data[5] = id >> 16;
+  message.data[6] = id >> 8;
+  message.data[7] = id;
 
   // Store data in buffers
-  memcpy(buff + HEADER_SIZE, data, length);
-  memcpy(message->addr, addr, 6);
-  message->data = buff;
+  memcpy(message.data + HEADER_SIZE, data, length);
 
-  this->message_queue_.push_back(message);
+  this->message_queue_.push(message);
 
   return true;
 }
@@ -192,13 +169,14 @@ void Communication::on_error_(uint8_t error) {
 }
 
 void Communication::send_byte_(const uint8_t byte) {
-  auto message = (uint8_t *)malloc(2);
-  message[0] = byte;
-  message[1] = 1;
+  uint8_t message[2] = {byte, 1};
+  uint8_t addr[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
-  this->interface_->send(message, (*this->message_queue_.begin())->addr);
+  // Try to take the addr of the first device in the queue
+  if (!this->message_queue_.empty())
+    memcpy(addr, this->message_queue_.front().addr, sizeof(addr));
 
-  delete message;
+  this->interface_->send(message, addr);
 }
 
 namespace helpers {

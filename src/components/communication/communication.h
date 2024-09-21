@@ -2,16 +2,11 @@
 #include <wcaf/components/interval/interval.h>
 #include <wcaf/core/component.h>
 #include <wcaf/core/log.h>
-#include <wcaf/helpers/list.h>
+#include <wcaf/helpers/circular_buffer.h>
 #include <wcaf/helpers/vector.h>
-
-#if defined(ARDUINO_ARCH_ESP8266)
-#include <list>
-#endif
 
 #if defined(ARDUINO_ESP32_DEV)
 #include <functional>
-#include <list>
 #endif
 
 using namespace wcaf;
@@ -31,23 +26,16 @@ class CommunicationInterface;
 
 class Communication : public Component {
  public:
-  struct message_ {
+  typedef struct {
     uint8_t addr[6];
-    uint8_t *data;
-  };
+    uint8_t data[128];
+  } t_Message;
+  typedef CircularBuffer<t_Message, 20> t_MessageQueue;
 
   void setup();
   void loop();
   const char *get_tag() { return TAG; }
   static const char *TAG;
-
-  /**
-   * @brief Sets the maximum size of a single message (the first 8 bytes are
-   * used by the header).
-   *
-   * @param size
-   */
-  void max_message_length(uint8_t size) { this->max_message_length_ = size; };
 
   /**
    * @brief Set the maximum millisecondes between the REQ and the actual
@@ -59,21 +47,11 @@ class Communication : public Component {
     this->receive_timeout_ = timeout;
   }
 
-  /**
-   * @brief Sets the maximum amount of message inside the queue at any given
-   * moment.
-   *
-   * @param size
-   */
-  void set_message_queue(uint8_t size) { this->max_queue_length_ = size; }
-
   void set_communication_interface(CommunicationInterface *interface) {
     this->interface_ = interface;
   }
 
-#if defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_AVR_MEGA2560)
-  list::List<message_ *> get_queue() { return this->message_queue_; }
-#endif
+  t_MessageQueue &get_queue() { return this->message_queue_; }
 
   /**
    * @brief Send data using the communication interface to an other device.
@@ -105,7 +83,7 @@ class Communication : public Component {
       this->is_receiving_ = 0;
     return this->is_receiving_ != 0;
   }
-  bool is_sending() { return this->message_queue_.size() > 0; }
+  bool is_sending() { return !this->message_queue_.empty(); }
   uint32_t get_last_time_receiving() { return this->last_time_receiving_; }
 
  protected:
@@ -118,21 +96,15 @@ class Communication : public Component {
   void send_byte_(const uint8_t byte);
 
   CommunicationInterface *interface_;
-  interval::Interval *req_interval_;
 
-  // Buffers
-  uint8_t max_message_length_{128};
-  uint8_t max_queue_length_{5};
+  uint32_t last_req_{0};
+  uint32_t last_time_receiving_{0};
 
-#if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
-  list::List<message_ *> message_queue_;
-#elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
-  std::list<message_ *> message_queue_;
-#endif
+  // Buffer
+  t_MessageQueue message_queue_;
 
   // Communication states
   uint32_t is_receiving_{0};
-  uint32_t last_time_receiving_{0};
 
   uint32_t receive_timeout_{10};
 // Callbacks
