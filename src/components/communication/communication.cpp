@@ -70,13 +70,13 @@ void Communication::setup() {
     // WCAF_LOG_DEFAULT("Received %u bytes from %s with id %lu", length,
     //               helpers::mac_addr_to_string(addr), id);
 
-    for (recv_callback_struct_ *callback : comm->recv_callbacks_) {
-      if (callback->id == id || callback->id == 0)
+    for (recv_callback_struct_ &callback : comm->recv_callbacks_) {
+      if (callback.id == id || callback.id == 0)
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
-        callback->lambda(data + HEADER_SIZE, length - HEADER_SIZE, addr,
-                         callback->argument);
+        callback.lambda(data + HEADER_SIZE, length - HEADER_SIZE, addr,
+                        callback.argument);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
-        callback->lambda(data + HEADER_SIZE, length - HEADER_SIZE, addr);
+        callback.lambda(data + HEADER_SIZE, length - HEADER_SIZE, addr);
 #endif
     }
   });
@@ -162,17 +162,8 @@ void Communication::on_message(uint32_t id, void *argument,
                                               const uint8_t length,
                                               const uint8_t *addr,
                                               void *argument)) {
-  auto tmp = (recv_callback_struct_ *)malloc(sizeof(recv_callback_struct_));
-
-  if (tmp == nullptr) {
-    WCAF_LOG_ERROR("Could not register on_message callback, out of memory");
-    return;
-  }
-
-  tmp->argument = argument;
-  tmp->id = id;
-  tmp->lambda = lambda;
-
+  recv_callback_struct_ tmp = {
+      .id = id, .argument = argument, .lambda = lambda};
   this->recv_callbacks_.push_back(tmp);
 }
 
@@ -183,16 +174,7 @@ void Communication::on_error(void (*lambda)(uint8_t error)) {
 void Communication::on_message(
     uint32_t id, std::function<void(const uint8_t *data, const uint8_t length,
                                     const uint8_t *addr)> &&lambda) {
-  auto tmp = (recv_callback_struct_ *)malloc(sizeof(recv_callback_struct_));
-
-  if (tmp == nullptr) {
-    WCAF_LOG_ERROR("Could not register on_message callback, out of memory");
-    return;
-  }
-
-  tmp->id = id;
-  tmp->lambda = lambda;
-
+  recv_callback_struct_ tmp = {.id = id, .lambda = lambda};
   this->recv_callbacks_.push_back(tmp);
 }
 

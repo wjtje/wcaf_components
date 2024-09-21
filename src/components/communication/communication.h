@@ -3,6 +3,7 @@
 #include <wcaf/core/component.h>
 #include <wcaf/core/log.h>
 #include <wcaf/helpers/list.h>
+#include <wcaf/helpers/vector.h>
 
 #if defined(ARDUINO_ARCH_ESP8266)
 #include <list>
@@ -142,9 +143,9 @@ class Communication : public Component {
     void (*lambda)(const uint8_t *data, const uint8_t length,
                    const uint8_t *addr, void *argument);
   };
-  list::List<recv_callback_struct_ *> recv_callbacks_;
+  Vector<recv_callback_struct_> recv_callbacks_;
 
-  list::List<void (*)(uint8_t error)> err_callbacks_;
+  Vector<void (*)(uint8_t error)> err_callbacks_;
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
   struct recv_callback_struct_ {
     uint32_t id;
@@ -152,9 +153,9 @@ class Communication : public Component {
                        const uint8_t *addr)>
         lambda;
   };
-  list::List<recv_callback_struct_ *> recv_callbacks_;
+  Vector<recv_callback_struct_> recv_callbacks_;
 
-  list::List<std::function<void(uint8_t error)> > err_callbacks_;
+  Vector<std::function<void(uint8_t error)> > err_callbacks_;
 #endif
 };
 
