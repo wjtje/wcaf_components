@@ -38,7 +38,7 @@ void Communication::setup() {
       comm->is_receiving_ = comm->last_time_receiving_;
       return;
     } else if (data[0] == ACK_BYTE) {
-      if (!comm->message_queue_.empty()) {
+      if (!comm->message_queue_.empty() && !comm->is_receiving()) {
         const t_Message &message = comm->message_queue_.dpop();
         comm->interface_->send(message.data, message.addr);
       } else {
@@ -66,16 +66,17 @@ void Communication::setup() {
     }
 
     // WCAF_LOG_DEFAULT("Received %u bytes from %s with id %lu", length,
-    //               helpers::mac_addr_to_string(addr), id);
+    //                  helpers::mac_addr_to_string(addr), id);
 
     for (recv_callback_struct_ &callback : comm->recv_callbacks_) {
-      if (callback.id == id || callback.id == 0)
+      if (callback.id == id || callback.id == 0) {
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
         callback.lambda(data + HEADER_SIZE, length - HEADER_SIZE, addr,
                         callback.argument);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
         callback.lambda(data + HEADER_SIZE, length - HEADER_SIZE, addr);
 #endif
+      }
     }
   });
 

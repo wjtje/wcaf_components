@@ -98,8 +98,12 @@ void Uart::loop() {
 }
 
 void Uart::send(const uint8_t *data, const uint8_t *addr) {
+  if (data[1] == 1 && data[0] == ACK_BYTE) {
+    while (this->serial_->peek() == REQ_BYTE) this->serial_->read();
+  }
+
   this->serial_->write(data, data[1]);
-  //   this->serial_->flush();
+  this->serial_->flush();
 }
 
 void Uart::reset_buffer_() {
