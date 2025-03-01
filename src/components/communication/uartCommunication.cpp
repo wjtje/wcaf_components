@@ -12,7 +12,10 @@ void Uart::setup() {
     return;
   }
 
-  if (this->init_serial_) this->serial_->begin(this->speed_);
+  if (this->init_serial_) {
+    this->serial_->begin(this->speed_);
+    delay(10);  // This decreases the change of a out of sync situation
+  }
 }
 
 void Uart::loop() {
@@ -67,6 +70,16 @@ void Uart::loop() {
     // Check if start byte is correct
     if (this->buffer_[0] != START_BYTE) {
       this->reset_buffer_();
+
+      if (++invalid_byte_count_ > 10) {
+        invalid_byte_count_ = 0;
+        // There is a chance that the UART is out of sync.
+        // This should not happen, but we restart the serial just is case.
+        this->serial_->end();
+        delay(1);
+        this->serial_->begin(this->speed_);
+      }
+
       continue;
     }
 
@@ -98,6 +111,7 @@ void Uart::loop() {
 }
 
 void Uart::send(const uint8_t *data, const uint8_t *addr) {
+  // Remove all REQ bytes that are in the recv buffer
   if (data[1] == 1 && data[0] == ACK_BYTE) {
     while (this->serial_->peek() == REQ_BYTE) this->serial_->read();
   }

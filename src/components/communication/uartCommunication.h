@@ -41,6 +41,7 @@ class Uart : public CommunicationInterface {
   HardwareSerial *serial_;
   unsigned long speed_{115200};
   bool init_serial_{true};
+  uint8_t invalid_byte_count_{0};
 
   // Buffer
   uint8_t buffer_size_;
