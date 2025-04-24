@@ -13,8 +13,6 @@ using namespace wcaf;
 
 namespace communication {
 
-static const uint8_t BROADCAST_ADDRESS[8] = {0xFF, 0xFF, 0xFF,
-                                             0xFF, 0xFF, 0xFF};
 static const uint8_t HEADER_SIZE = 8;
 static const uint8_t START_BYTE = 0x55;
 static const uint8_t REQ_BYTE = 0x56;
@@ -26,15 +24,14 @@ class CommunicationInterface;
 
 class Communication : public Component {
  public:
-  typedef struct {
-    uint8_t addr[6];
+  struct Message {
     uint8_t data[128];
-  } t_Message;
-  typedef CircularBuffer<t_Message, 20> t_MessageQueue;
+  };
+  using MessageQueue = CircularBuffer<Message, 5>;
 
-  void setup();
-  void loop();
-  const char *get_tag() { return TAG; }
+  virtual void setup() override;
+  virtual void loop() override;
+  virtual const char *get_tag() override { return TAG; }
   static const char *TAG;
 
   /**
@@ -51,7 +48,7 @@ class Communication : public Component {
     this->interface_ = interface;
   }
 
-  t_MessageQueue &get_queue() { return this->message_queue_; }
+  MessageQueue &get_queue() { return this->message_queue_; }
 
   /**
    * @brief Send data using the communication interface to an other device.
@@ -59,22 +56,20 @@ class Communication : public Component {
    * @param id A 4 byte number to indicate what kind of message you are sending.
    * @param data A pointer to data you want to send
    * @param length The length of data. The maximum is buffer size - header size
-   * @param addr The address receiving the data, defaults to broadcast
    * @return true The message is being send
    * @return false Couldn't send your message
    */
   bool send_message(const uint32_t id, const uint8_t *data,
-                    const uint8_t length,
-                    const uint8_t *addr = BROADCAST_ADDRESS);
+                    const uint8_t length);
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
   void on_message(uint32_t id, void *argument,
                   void (*lambda)(const uint8_t *data, const uint8_t length,
-                                 const uint8_t *addr, void *argument));
+                                 void *argument));
   void on_error(void (*lambda)(uint8_t error));
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
   void on_message(uint32_t id,
-                  std::function<void(const uint8_t *data, const uint8_t length,
-                                     const uint8_t *addr)> &&lambda);
+                  std::function<void(const uint8_t *data,
+                                     const uint8_t length, )> &&lambda);
   void on_error(std::function<void(const uint8_t error)> &&lambda);
 #endif
 
@@ -101,7 +96,7 @@ class Communication : public Component {
   uint32_t last_time_receiving_{0};
 
   // Buffer
-  t_MessageQueue message_queue_;
+  MessageQueue message_queue_;
 
   // Communication states
   uint32_t is_receiving_{0};
@@ -112,8 +107,7 @@ class Communication : public Component {
   struct recv_callback_struct_ {
     uint32_t id;
     void *argument;
-    void (*lambda)(const uint8_t *data, const uint8_t length,
-                   const uint8_t *addr, void *argument);
+    void (*lambda)(const uint8_t *data, const uint8_t length, void *argument);
   };
   Vector<recv_callback_struct_> recv_callbacks_;
 
@@ -121,9 +115,7 @@ class Communication : public Component {
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
   struct recv_callback_struct_ {
     uint32_t id;
-    std::function<void(const uint8_t *data, const uint8_t length,
-                       const uint8_t *addr)>
-        lambda;
+    std::function<void(const uint8_t *data, const uint8_t length)> lambda;
   };
   Vector<recv_callback_struct_> recv_callbacks_;
 
@@ -133,27 +125,24 @@ class Communication : public Component {
 
 class CommunicationInterface : public Component {
  public:
-  virtual void set_buffer_size(uint8_t size);
-  virtual void send(const uint8_t *data, const uint8_t *addr);
+  virtual void set_buffer_size(uint8_t size) = 0;
+  virtual void send(const uint8_t *data) = 0;
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
   void set_argument(void *argument) { this->argument_ = argument; }
-  virtual void on_data(void (*lambda)(const uint8_t *data, const uint8_t *addr,
-                                      void *argument));
-  virtual void on_error(void (*lambda)(uint8_t error, void *argument));
+  virtual void on_data(void (*lambda)(const uint8_t *data, void *argument)) = 0;
+  virtual void on_error(void (*lambda)(uint8_t error, void *argument)) = 0;
 
  protected:
   void *argument_;
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
-  virtual void on_data(
-      std::function<void(const uint8_t *data, const uint8_t *addr)> &&lambda);
-  virtual void on_error(std::function<void(uint8_t error)> &&lambda);
+  virtual void on_data(std::function<void(const uint8_t *data)> &&lambda) = 0;
+  virtual void on_error(std::function<void(uint8_t error)> &&lambda) = 0;
 #endif
 };
 
 namespace helpers {
 
 uint16_t crc(const uint8_t *data, uint8_t length);
-char *mac_addr_to_string(const uint8_t *mac_addr);
 const char *error_to_string(uint8_t error);
 
 }  // namespace helpers

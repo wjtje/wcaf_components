@@ -6,16 +6,17 @@ const char *Communication::TAG = "Communication";
 // char buff_[512];  // Buffer is used for debug
 
 void Communication::setup() {
+  sizeof(Communication);
+
   // Setup interface
-  this->interface_->set_buffer_size(sizeof(t_Message::data));
+  this->interface_->set_buffer_size(sizeof(Message));
   this->interface_->setup();
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
   this->interface_->set_argument(this);
-  this->interface_->on_data([](const uint8_t *data, const uint8_t *addr,
-                               void *argument) {
+  this->interface_->on_data([](const uint8_t *data, void *argument) {
     Communication *comm = (Communication *)argument;
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
-  this->interface_->on_data([this](const uint8_t *data, const uint8_t *addr) {
+  this->interface_->on_data([this](const uint8_t *data) {
     Communication *comm = this;
 #endif
     comm->last_time_receiving_ = millis();
@@ -39,8 +40,8 @@ void Communication::setup() {
       return;
     } else if (data[0] == ACK_BYTE) {
       if (!comm->message_queue_.empty() && !comm->is_receiving()) {
-        const t_Message &message = comm->message_queue_.dpop();
-        comm->interface_->send(message.data, message.addr);
+        const Message &message = comm->message_queue_.dpop();
+        comm->interface_->send(message.data);
       } else {
         // WCAF_LOG_WARNING("Received ACK, but not sending anything");
       }
@@ -65,16 +66,15 @@ void Communication::setup() {
       return;
     }
 
-    // WCAF_LOG_DEFAULT("Received %u bytes from %s with id %lu", length,
-    //                  helpers::mac_addr_to_string(addr), id);
+    // WCAF_LOG_DEFAULT("Received %u bytes with id %lu", length, id);
 
     for (recv_callback_struct_ &callback : comm->recv_callbacks_) {
       if (callback.id == id || callback.id == 0) {
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
-        callback.lambda(data + HEADER_SIZE, length - HEADER_SIZE, addr,
+        callback.lambda(data + HEADER_SIZE, length - HEADER_SIZE,
                         callback.argument);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
-        callback.lambda(data + HEADER_SIZE, length - HEADER_SIZE, addr);
+        callback.lambda(data + HEADER_SIZE, length - HEADER_SIZE);
 #endif
       }
     }
@@ -100,8 +100,8 @@ void Communication::loop() {
 }
 
 bool Communication::send_message(const uint32_t id, const uint8_t *data,
-                                 const uint8_t length, const uint8_t *addr) {
-  if (length > sizeof(t_Message::data) - HEADER_SIZE) {
+                                 const uint8_t length) {
+  if (length > sizeof(Message) - HEADER_SIZE) {
     WCAF_LOG_WARNING("Message is to large");
     return false;
   }
@@ -111,8 +111,7 @@ bool Communication::send_message(const uint32_t id, const uint8_t *data,
     return false;
   }
 
-  t_Message message;
-  memcpy(message.addr, addr, sizeof(message.addr));
+  Message message;
 
   // Create header
   uint16_t crc = helpers::crc(data, length);
@@ -138,7 +137,6 @@ bool Communication::send_message(const uint32_t id, const uint8_t *data,
 void Communication::on_message(uint32_t id, void *argument,
                                void (*lambda)(const uint8_t *data,
                                               const uint8_t length,
-                                              const uint8_t *addr,
                                               void *argument)) {
   recv_callback_struct_ tmp = {
       .id = id, .argument = argument, .lambda = lambda};
@@ -150,8 +148,8 @@ void Communication::on_error(void (*lambda)(uint8_t error)) {
 }
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
 void Communication::on_message(
-    uint32_t id, std::function<void(const uint8_t *data, const uint8_t length,
-                                    const uint8_t *addr)> &&lambda) {
+    uint32_t id,
+    std::function<void(const uint8_t *data, const uint8_t length)> &&lambda) {
   recv_callback_struct_ tmp = {.id = id, .lambda = lambda};
   this->recv_callbacks_.push_back(tmp);
 }
@@ -171,13 +169,7 @@ void Communication::on_error_(uint8_t error) {
 
 void Communication::send_byte_(const uint8_t byte) {
   uint8_t message[2] = {byte, 1};
-  uint8_t addr[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-
-  // Try to take the addr of the first device in the queue
-  if (!this->message_queue_.empty())
-    memcpy(addr, this->message_queue_.front().addr, sizeof(addr));
-
-  this->interface_->send(message, addr);
+  this->interface_->send(message);
 }
 
 namespace helpers {
@@ -194,15 +186,6 @@ uint16_t crc(const uint8_t *data, uint8_t length) {
   }
 
   return crc;
-}
-
-char mac_addr_buff_[18];
-
-char *mac_addr_to_string(const uint8_t *mac_addr) {
-  snprintf(mac_addr_buff_, sizeof(mac_addr_buff_),
-           "%02x:%02x:%02x:%02x:%02x:%02x", mac_addr[0], mac_addr[1],
-           mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-  return mac_addr_buff_;
 }
 
 const char *error_to_string(uint8_t error) {

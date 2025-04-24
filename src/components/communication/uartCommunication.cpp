@@ -59,9 +59,9 @@ void Uart::loop() {
     // Check for REQ and ACK byes
     if (this->buffer_[0] == REQ_BYTE || this->buffer_[0] == ACK_BYTE) {
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
-      this->on_data_(this->buffer_, BROADCAST_ADDRESS, this->argument_);
+      this->on_data_(this->buffer_, this->argument_);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
-      this->on_data_(this->buffer_, BROADCAST_ADDRESS);
+      this->on_data_(this->buffer_);
 #endif
       this->reset_buffer_();
       continue;
@@ -88,9 +88,9 @@ void Uart::loop() {
     // Check if the correct amount of bytes are received
     if (this->buffer_[1] == this->buffer_pos_ && this->buffer_pos_ > 0) {
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
-      this->on_data_(this->buffer_, BROADCAST_ADDRESS, this->argument_);
+      this->on_data_(this->buffer_, this->argument_);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
-      this->on_data_(this->buffer_, BROADCAST_ADDRESS);
+      this->on_data_(this->buffer_);
 #endif
       this->reset_buffer_();
       continue;
@@ -110,7 +110,7 @@ void Uart::loop() {
   }
 }
 
-void Uart::send(const uint8_t *data, const uint8_t *addr) {
+void Uart::send(const uint8_t *data) {
   // Remove all REQ bytes that are in the recv buffer
   if (data[1] == 1 && data[0] == ACK_BYTE) {
     while (this->serial_->peek() == REQ_BYTE) this->serial_->read();

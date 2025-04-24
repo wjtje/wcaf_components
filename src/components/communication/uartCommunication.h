@@ -6,28 +6,30 @@ namespace uart {
 
 class Uart : public CommunicationInterface {
  public:
-  void setup();
-  void loop();
-  const char *get_tag() { return TAG; }
+  virtual void setup() override;
+  virtual void loop() override;
+  virtual const char *get_tag() override { return TAG; }
   static const char *TAG;
 
-  void set_buffer_size(uint8_t size) { this->buffer_size_ = size; }
+  virtual void set_buffer_size(uint8_t size) override {
+    this->buffer_size_ = size;
+  }
   void set_serial(HardwareSerial *serial) { this->serial_ = serial; }
   void set_speed(unsigned long speed) { this->speed_ = speed; }
   void set_init_serial(bool init_serial) { this->init_serial_ = init_serial; }
 
-  void send(const uint8_t *data, const uint8_t *addr);
+  virtual void send(const uint8_t *data) override;
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
-  void on_data(void (*lambda)(const uint8_t *data, const uint8_t *addr,
-                              void *argument)) {
+  virtual void on_data(void (*lambda)(const uint8_t *data,
+                                      void *argument)) override {
     this->on_data_ = lambda;
   }
-  void on_error(void (*lambda)(uint8_t error, void *argument)) {
+  virtual void on_error(void (*lambda)(uint8_t error,
+                                       void *argument)) override {
     this->on_error_ = lambda;
   }
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
-  void on_data(
-      std::function<void(const uint8_t *data, const uint8_t *addr)> &&lambda) {
+  void on_data(std::function<void(const uint8_t *data)> &&lambda) {
     this->on_data_ = lambda;
   }
   void on_error(std::function<void(uint8_t error)> &&lambda) {
@@ -54,10 +56,10 @@ class Uart : public CommunicationInterface {
 
   // Callbacks
 #if defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
-  void (*on_data_)(const uint8_t *data, const uint8_t *addr, void *argument);
+  void (*on_data_)(const uint8_t *data, void *argument);
   void (*on_error_)(uint8_t error, void *argument);
 #elif defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ESP32_DEV)
-  std::function<void(const uint8_t *data, const uint8_t *addr)> on_data_;
+  std::function<void(const uint8_t *data)> on_data_;
   std::function<void(uint8_t error)> on_error_;
 #endif
 };
